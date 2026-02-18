@@ -1,5 +1,5 @@
 import { FFmpeg } from "https://unpkg.com/@ffmpeg/ffmpeg@0.12.10/dist/esm/index.js";
-import { fetchFile } from "https://unpkg.com/@ffmpeg/util@0.12.1/dist/esm/index.js";
+import { fetchFile, toBlobURL } from "https://unpkg.com/@ffmpeg/util@0.12.1/dist/esm/index.js";
 
 const fileEl = document.getElementById("file");
 const vbEl = document.getElementById("vb");
@@ -21,11 +21,21 @@ function humanBytes(bytes) {
 
 async function ensureLoaded() {
   if (ffmpeg.loaded) return;
-  statusEl.textContent = "Loading compressor (first time can take a bit)…";
+
+  // ffmpeg.wasm needs to fetch a JS core, a WASM binary, and a worker.
+  // On some hosts (including GitHub Pages), creating blob URLs avoids CORS/worker issues.
+  statusEl.textContent = "Loading compressor (first time downloads ~25–35MB)…";
+
+  const base = "https://unpkg.com/@ffmpeg/core@0.12.6/dist/esm";
+  const coreURL = await toBlobURL(`${base}/ffmpeg-core.js`, "text/javascript");
+  const wasmURL = await toBlobURL(`${base}/ffmpeg-core.wasm`, "application/wasm");
+  const workerURL = await toBlobURL(`${base}/ffmpeg-core.worker.js`, "text/javascript");
+
   ffmpeg.on("progress", (p) => {
     progEl.value = Math.max(0, Math.min(1, p.progress ?? 0));
   });
-  await ffmpeg.load();
+
+  await ffmpeg.load({ coreURL, wasmURL, workerURL });
 }
 
 goEl.addEventListener("click", async () => {
